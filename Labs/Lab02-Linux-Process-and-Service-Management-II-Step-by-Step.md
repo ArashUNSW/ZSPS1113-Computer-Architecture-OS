@@ -605,25 +605,25 @@ The sleep process should show a nice value of 10.
 
 ## Task 18 - Change Priority with `renice`
 
-Find the PID:
+Start a sleep process for 300 seconds in the background with a nice value of 10:
 
 ```bash
-pgrep -n sleep
+nice -n 10 sleep 300 &
 ```
 
-Store it in a shell variable:
+Store the Process ID (PID) of the most recently started background process in a variable called SLEEP_PID:
 
 ```bash
-SLEEP_PID=$(pgrep -n sleep)
+SLEEP_PID=$!
 ```
 
-Display it:
+Display the PID stored in the SLEEP_PID variable:
 
 ```bash
-echo $SLEEP_PID
+echo "$SLEEP_PID"
 ```
 
-Change the nice value to `15`:
+Change the nice value of the sleep process to 15 using its PID:
 
 ```bash
 renice -n 15 -p "$SLEEP_PID"
