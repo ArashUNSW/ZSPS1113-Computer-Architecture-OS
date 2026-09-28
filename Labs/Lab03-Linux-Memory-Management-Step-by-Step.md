@@ -460,7 +460,7 @@ Before finishing, check that you have:
 - [ ] Distinguished disk I/O metrics from swap-in/swap-out counters.
 - [ ] Tested a temporary memory limit safely.
 - [ ] Monitored memory with Linux tools and `psutil`.
-- [ ] Run the LRU simulation and explained its replacement decisions.
+
 
 
 ## Knowledge Check
@@ -471,9 +471,5 @@ Before finishing, check that you have:
 4. What information appears in `/proc/<PID>/maps`?
 5. What does `mmap` allow a program to do?
 6. Which `vmstat` columns provide evidence of swap-in and swap-out?
-7. Why does the LRU demonstration not establish the Linux kernel's exact page-replacement behaviour?
-8. Why should a resource-bottleneck conclusion be supported by both measurements and source-code analysis?
 
-## Summary
 
-You inspected Linux memory from both the operating-system and Python perspectives; compared virtual and resident memory; explored process mappings, allocation/reuse, memory limits, and real-time monitoring; and simulated LRU replacement. The assessed portion extends these observations to `/proc` statistics, two instructor-supplied memory programs, and three resource-bottleneck programs.
