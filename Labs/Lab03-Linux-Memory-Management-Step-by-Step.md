@@ -538,9 +538,7 @@ Before finishing, check that you have:
 - [ ] Tested a temporary memory limit safely.
 - [ ] Monitored memory with Linux tools and `psutil`.
 - [ ] Run the LRU simulation and explained its replacement decisions.
-- [ ] Obtained the **separate instructor-supplied assessment scripts**.
-- [ ] Completed all three assessed tasks with measurements and code-based explanations.
-- [ ] Checked the **current** Moodle deadline, filename, and submission instructions.
+
 
 ## Knowledge Check
 
