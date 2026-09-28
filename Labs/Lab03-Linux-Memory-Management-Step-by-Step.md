@@ -486,8 +486,6 @@ python3 lru_demo.py
 ---
 
 
----
-
 ## Troubleshooting
 
 ### `ModuleNotFoundError: No module named 'psutil'`
