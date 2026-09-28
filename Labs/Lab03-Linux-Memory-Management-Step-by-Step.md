@@ -22,15 +22,6 @@ By the end of this lab, you should be able to:
 
 You are investigating how a Linux operating system allocates, tracks, and reuses memory. You will compare information reported by Linux with measurements taken from Python programs. Your job is to record **what your VM actually does**, explain differences using the program code, and identify whether CPU, memory, or disk I/O is the main bottleneck in instructor-provided programs.
 
-> [!note] **Assessment information in the original PDF**
->
-> The original document states that this lab is worth **10% of the final grade**, with **three assessed tasks totalling 10 marks**. It specifies a single Word or PDF report, **four pages maximum excluding the cover page**, submitted through Moodle. The PDF also contains an **old due date of Friday 17 October 2025, 11:55 pm** and the filename `ZSPS1113-Lab1Submission-Full Name.docx`, despite this being Lab 3. **Confirm the current deadline and filename with your instructor rather than using those historical details.** Extension and late-submission arrangements must follow the current course outline.
-
-> [!alert] **Missing assessment files**
->
-> The original PDF refers to a separate `scripts.zip` containing the assessed `memory1`/`memory2` programs and `CPUtest.py`, `memorytest.py`, and `disktest.py`. **That ZIP was not included with this PDF.** This guide includes the demonstration code shown in the PDF, but the assessed programs must be obtained from your instructor. The assessment text also inconsistently refers to `memory1.c`/`memory2.c` and `memory1.py`/`memory2.py`; check the actual supplied extensions before running them.
-
----
 
 ## Before You Begin
 
@@ -201,8 +192,6 @@ Save the file.
 
 > [!alert] The second program can consume substantially more physical memory because it constructs many distinct Python integer objects. If your VM is memory-constrained, change **both** programs to `10 ** 6` and record that you used a smaller, equal input size. Do not run this test while another memory-intensive exercise is active.
 
-> [!note] The PDF describes the two cases as “allocate but don't touch” and “allocate and touch.” This is a useful teaching comparison, but Python list and integer-object allocation also affect the results. This is **not** a controlled experiment that isolates page touching alone.
-
 ### Task 9 - Run and Compare the Two Programs
 
 Run the first program and record its PID:
@@ -350,7 +339,7 @@ wait "$FRAGMENT_PID"
 
 **Expected observation:** Some Python objects are released, but the process's RSS may not immediately fall by the same amount. Python's allocator and the operating system may retain pages for reuse.
 
-> [!note] This example illustrates **allocation and reuse behaviour**, not a direct measurement of physical-memory fragmentation.
+
 
 ### Task 13 - Monitor Disk Activity and Swap Indicators
 
