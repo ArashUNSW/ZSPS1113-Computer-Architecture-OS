@@ -441,10 +441,6 @@ Stop the experiment, reduce the array/list size, and repeat **both comparison pr
 
 That is a valid outcome. Record that the tested workload did not generate observable swap activity; do not describe disk I/O as swap without corroborating evidence.
 
-### `memory1.c`, `memory2.c`, or assessment scripts are unavailable
-
-The separate `scripts.zip` mentioned in the original PDF is required for the assessed programs. Obtain the instructor's package rather than treating the practice examples as identical substitutes.
-
 ---
 
 ## Final Validation
