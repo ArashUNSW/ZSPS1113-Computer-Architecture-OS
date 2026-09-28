@@ -14,7 +14,6 @@ By the end of this lab, you should be able to:
 - Monitor memory pressure, paging indicators, and disk activity without overloading the lab VM.
 - Experiment with a temporary virtual-memory limit.
 - Simulate least recently used (**LRU**) page replacement.
-- Gather evidence for the three assessed tasks in the original lab.
 
 ---
 
