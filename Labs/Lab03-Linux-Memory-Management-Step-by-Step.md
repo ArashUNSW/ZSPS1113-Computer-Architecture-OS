@@ -198,6 +198,7 @@ Run the first program and record its PID:
 ```bash
 python3 memory1.py &
 PID1=$!
+sleep 5
 ps -o pid,vsz,rss,%mem,cmd -p "$PID1"
 wait "$PID1"
 ```
@@ -207,6 +208,7 @@ Run the second program **after the first has finished**:
 ```bash
 python3 memory2.py &
 PID2=$!
+sleep 5
 ps -o pid,vsz,rss,%mem,cmd -p "$PID2"
 wait "$PID2"
 ```
