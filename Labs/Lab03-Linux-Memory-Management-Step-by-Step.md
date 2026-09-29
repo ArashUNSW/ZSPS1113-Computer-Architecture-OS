@@ -1,7 +1,6 @@
 # Lab 03 - Exploring Linux Memory Management with Python
 
-**Suggested practical time:** 2-3 hours, depending on VM performance and the assessment scripts supplied by your instructor.
-
+**Suggested practical time:** 2-3 hours, depending on VM performance.
 ## Learning Objectives
 
 By the end of this lab, you should be able to:
