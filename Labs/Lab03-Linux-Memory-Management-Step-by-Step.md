@@ -364,7 +364,7 @@ vmstat 2 5
 
 Observe `si` (swap-in) and `so` (swap-out) in `vmstat`, together with disk metrics in `iostat`. **`iostat` alone does not measure swap activity.**
 
-
+Larger optional example:
 
 ```python
 import time
