@@ -432,7 +432,7 @@ Record your observations:
 
 The `mkfs` command creates a file system on a partition or block device.
 
-For example, the original lab demonstrates a command in this form:
+For example, a command in this form:
 
 ```bash
 mkfs -t vfat /dev/sdb1
