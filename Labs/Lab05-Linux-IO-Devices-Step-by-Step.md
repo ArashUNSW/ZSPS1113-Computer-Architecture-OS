@@ -61,7 +61,7 @@ Use this directory for the remaining activities unless a command specifies anoth
 
 ## Task 3 – Create a 200 MiB Virtual Disk File
 
-**Lecture connection (block devices and disk partitioning):** Linux normally treats disks as *block devices*, meaning data is accessed in blocks. In this lab, you will create a regular file and let Linux present it as a pretend block device through a **loop device**. This gives you a safe way to explore the block-device interface without changing the VM's real system disk. A loop device is a software representation; it is **not a new physical disk**.
+**block devices and disk partitioning:** Linux normally treats disks as *block devices*, meaning data is accessed in blocks. In this lab, you will create a regular file and let Linux present it as a pretend block device through a **loop device**. This gives you a safe way to explore the block-device interface without changing the VM's real system disk. A loop device is a software representation; it is **not a new physical disk**.
 
 ```bash
 dd if=/dev/zero of=virtualdisk.img bs=1M count=200 status=progress
@@ -275,7 +275,7 @@ python3 event_demo.py
 
 ## Task 13 – List Loaded Kernel Modules
 
-**Lecture connection (device drivers and controllers):** A **device controller** handles communication with the hardware. A **device driver** is operating-system software that communicates with the controller on behalf of the kernel. In Linux, some drivers are compiled into the kernel and others are provided as **loadable kernel modules**. Not every kernel module is a device driver; modules can also provide file systems and other kernel features.
+**device drivers and controllers:** A **device controller** handles communication with the hardware. A **device driver** is operating-system software that communicates with the controller on behalf of the kernel. In Linux, some drivers are compiled into the kernel and others are provided as **loadable kernel modules**. Not every kernel module is a device driver; modules can also provide file systems and other kernel features.
 
 ```bash
 lsmod | head -15
@@ -376,8 +376,6 @@ Look again at the device information you obtained in Task 15:
 ```bash
 lsblk -d -o NAME,SIZE,ROTA,MODEL
 ```
-
-Complete the comparison using **your lecture slides** (not assumptions about your VM):
 
 | Characteristic | HDD | SSD |
 |---|---|---|
