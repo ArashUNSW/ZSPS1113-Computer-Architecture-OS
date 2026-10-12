@@ -1,663 +1,446 @@
-# Lab 05 - Exploring Linux I/O Devices with Python and CLI
+# Lab 05 – Exploring Linux I/O Devices with Python and CLI
 
-## Estimated Time
+**Estimated time:** 90–120 minutes  
+**Environment:** Skillable Linux lab VM (Ubuntu/Debian-based) or equivalent Linux VM  
+**Tools:** Linux terminal, Python 3, `psutil`, and standard Linux utilities
 
-Approximately **90–120 minutes** for the guided lab.
-
-Allow additional time for the graded submission tasks at the end.
-
----
+> **Important:** Run all commands inside the **Linux lab VM**, not on your personal computer. GitHub displays this Markdown guide; commands run in the Skillable terminal. Some hardware details and device names vary between virtual machines.
 
 ## Learning Objectives
 
-By the end of this lab, you will be able to:
+By the end of this lab, you should be able to:
 
-- Explain how Linux represents block and character I/O devices.
-- Create a file-backed virtual disk safely using `dd`.
-- Map a virtual disk file to a loop device using `losetup`.
-- Identify storage devices and character devices.
-- Use Python and `psutil` to inspect disk partitions and disk usage.
-- Inspect I/O controllers with `lspci`, `dmesg`, `hdparm`, and `lshw`.
-- Explain the difference between memory-mapped I/O and port-mapped I/O.
-- Explain the difference between polling and interrupt-driven I/O.
-- Inspect loaded kernel modules and device-driver information.
-- Compare storage access and transfer behaviour.
-- Compare buffered and lower-level file I/O.
-- Monitor I/O activity using `iostat`, `dstat`, and Python.
-- Safely simulate storage pressure and I/O errors using a disposable file-backed device.
-
----
+- Identify block and character devices and explain the role of device drivers.
+- Create and inspect a safe file-backed virtual disk.
+- Inspect Linux storage and I/O devices using command-line tools and Python.
+- Distinguish memory-mapped I/O from port-mapped I/O, and polling from interrupt-driven I/O.
+- Compare basic file-writing interfaces and observe disk read time.
+- Monitor I/O activity using `iostat` and Python.
 
 ## Scenario
 
-You are continuing your Linux systems administration work.
+You are investigating how a Linux operating system communicates with I/O devices. You will create a small **disposable virtual disk**, inspect devices and drivers, explore two I/O-handling approaches, and observe simple I/O activity. The goal is to understand the concepts, not to administer real storage hardware.
 
-In the previous lab, you explored Linux file systems and disk management. In this lab, you will extend that knowledge by examining Linux I/O behaviour.
+## Safety and Setup
 
-You will work with file-backed virtual disks, loop devices, block and character devices, storage controllers, device drivers, polling and interrupt-like behaviour, disk latency, buffered and unbuffered I/O, and performance-monitoring tools.
-
-> [!alert]
-> Some commands in the original lab use the system disk directly.
->
-> In this converted lab, all potentially destructive storage experiments should be performed only on a **disposable file-backed virtual disk or instructor-provided practice device**.
->
-> Do not write to the active system disk such as `/dev/sda` unless explicitly instructed.
+- **Do not format, overwrite, or modify the VM's system disk** (such as `/dev/sda`, `/dev/vda`, or `/dev/nvme0n1`).
+- Only attach and detach the loop device created from **your own** `~/lab05/virtualdisk.img` file.
+- Commands requiring `sudo` may be unavailable in some Skillable environments. If a command is blocked, **record the result and continue**; do not attempt to bypass restrictions.
+- Do not copy example device names blindly. Check the actual device name in your VM.
+- Command outputs will differ between VMs. These differences are normal.
 
 ---
 
-# Part A - Prepare the Lab Environment
+# Part A – Prepare the Environment
 
-## Task 1 - Confirm Your Linux Environment
+## Task 1 – Confirm Your Linux Environment
 
-Run:
+Open the terminal and run:
 
 ```bash
 whoami
-```
-
-Then:
-
-```bash
 pwd
-```
-
-Check Python:
-
-```bash
 python3 --version
 ```
 
-Check whether `psutil` is available:
+**Check:** Which user are you logged in as? What version of Python is installed?
+
+## Task 2 – Create Your Working Directory
+
+```bash
+mkdir -p ~/lab05
+cd ~/lab05
+pwd
+```
+
+Use this directory for the remaining activities unless a command specifies another path.
+
+---
+
+# Part B – Create and Inspect a Virtual Disk
+
+## Task 3 – Create a 200 MiB Virtual Disk File
+
+```bash
+dd if=/dev/zero of=virtualdisk.img bs=1M count=200 status=progress
+ls -lh virtualdisk.img
+```
+
+`dd` copies data from an input to an output. Here, `/dev/zero` provides zeros and `virtualdisk.img` stores the result. **Do not change the output path to a physical device.**
+
+**Check:** Approximately how large is the file?
+
+## Task 4 – Attach the File to a Loop Device
+
+A *loop device* lets Linux access an ordinary file through a block-device interface.
+
+```bash
+sudo losetup --find --show ~/lab05/virtualdisk.img
+```
+
+An output such as `/dev/loop9` means the file was attached. Your device number will differ. Record it here:
+
+**My loop device:** `________________`
+
+If `sudo` or loop devices are not available, record this and continue with the remaining tasks. You can still inspect the virtual disk **file**.
+
+## Task 5 – Identify the Virtual Disk
+
+```bash
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINTS
+sudo losetup -a
+```
+
+Find the loop device linked to your file (if the previous task succeeded). **Do not confuse it with the VM's system disk.**
+
+**Question:** What is the difference between `virtualdisk.img` and its `/dev/loopX` representation?
+
+---
+
+# Part C – Identify I/O Devices
+
+## Task 6 – Explore Block Devices
+
+```bash
+lsblk -o NAME,SIZE,TYPE,MOUNTPOINTS
+```
+
+Identify one disk and, if available, one loop device. Record their types and approximate sizes.
+
+**Question:** Why are disks usually accessed as block devices?
+
+## Task 7 – Explore Character Devices
+
+```bash
+ls -l /dev/null /dev/zero /dev/tty
+```
+
+Look at the first character in each listing (`c` indicates a character device). If `/dev/tty` is unavailable in your session, use `/dev/null` and `/dev/zero`.
+
+**Question:** In general terms, how is a character device different from a block device?
+
+## Task 8 – Inspect Disk Information with Python
+
+Check for `psutil`:
 
 ```bash
 python3 -c "import psutil; print(psutil.__version__)"
 ```
 
-If it is missing:
+If it is not installed and package installation is allowed, run:
 
 ```bash
-sudo apt update
-sudo apt install python3-psutil -y
+sudo apt-get update
+sudo apt-get install -y python3-psutil
 ```
 
----
-
-# Part B - Create a File-Backed Virtual Disk
-
-## Task 2 - Create a Safe Working Directory
-
-Create a directory for the lab:
-
-```bash
-mkdir -p ~/lab05
-```
-
-Move into it:
-
-```bash
-cd ~/lab05
-```
-
-Confirm:
-
-```bash
-pwd
-```
-
----
-
-## Task 3 - Create a 200 MB Virtual Disk File
-
-Run:
-
-```bash
-dd if=/dev/zero of=virtualdisk.img bs=1M count=200 status=progress
-```
-
-Check it:
-
-```bash
-ls -lh virtualdisk.img
-```
-
-Expected result:
-
-```text
-A file approximately 200 MB in size.
-```
-
-### Command Breakdown
-
-| Element | Meaning |
-|---|---|
-| `if=/dev/zero` | Input source that continuously provides zero bytes |
-| `of=virtualdisk.img` | Output file |
-| `bs=1M` | Block size of 1 MB |
-| `count=200` | Copy 200 blocks |
-| `status=progress` | Show progress while running |
-
----
-
-## Task 4 - Map the File to a Loop Device
-
-Run:
-
-```bash
-sudo losetup -fP ~/lab05/virtualdisk.img
-```
-
-List active loop devices:
-
-```bash
-sudo losetup -a
-```
-
-You should see an entry similar to:
-
-```text
-/dev/loop9: (...) (/home/student/lab05/virtualdisk.img)
-```
-
-Your loop-device number will probably be different.
-
-Record:
-
-```text
-Assigned loop device:
-```
-
----
-
-## Task 5 - Confirm the Loop Device
-
-Run:
-
-```bash
-lsblk
-```
-
-Look for the loop device associated with `virtualdisk.img`.
-
-> [!note]
-> A loop device allows Linux to treat a regular file as if it were a block device.
-
----
-
-# Part C - Identify and Classify I/O Devices
-
-## Task 6 - List Block Devices
-
-Run:
-
-```bash
-lsblk -o NAME,MAJ:MIN,RM,SIZE,RO,TYPE,MOUNTPOINTS
-```
-
-Record examples of block devices.
-
-| Device | Type | Size | Mounted? |
-|---|---|---:|---|
-| | | | |
-| | | | |
-
----
-
-## Task 7 - List Character Devices
-
-Run:
-
-```bash
-ls /dev | grep tty
-```
-
-You may see entries such as:
-
-```text
-tty
-tty0
-tty1
-ttyS0
-```
-
-These are examples of character-device interfaces.
-
-### Question
-
-What is the difference between a block device and a character device?
-
-Record one example of each from your own system.
-
----
-
-# Part D - Inspect Disk Information with Python
-
-## Task 8 - Create a Python Disk Information Script
-
-Create:
+Create `disk_info.py`:
 
 ```bash
 nano disk_info.py
 ```
 
-Enter:
+Enter the following code:
 
 ```python
 import psutil
 
-print("Disk Partitions:")
-for p in psutil.disk_partitions():
-    print(p)
-
-print("\nDisk Usage:")
-for p in psutil.disk_partitions():
+print("Mounted disk partitions:")
+for partition in psutil.disk_partitions():
+    print(partition.device, partition.mountpoint, partition.fstype)
     try:
-        print(f"{p.device} =>", psutil.disk_usage(p.mountpoint))
-    except PermissionError:
-        print(f"{p.device} => Permission denied")
+        usage = psutil.disk_usage(partition.mountpoint)
+        print("  Used:", usage.percent, "%")
+    except (PermissionError, OSError):
+        print("  Usage not available")
 ```
 
-Run:
+Save and run:
 
 ```bash
 python3 disk_info.py
 ```
 
-Observe the device name, mount point, file-system type, mount options, and total/used/free space.
+**Question:** What do the device name, mount point, file-system type, and percentage used tell you? If `psutil` cannot be installed, use `df -h` for a basic comparison and record the limitation.
 
 ---
 
-# Part E - Inspect I/O Controllers
+# Part D – Controllers and I/O Concepts
 
-## Task 9 - Inspect PCI Devices
+## Task 9 – Inspect I/O Controllers
 
-Run:
+Try:
 
 ```bash
 lspci
 ```
 
-To search for USB controllers:
+To filter for storage or USB controllers:
 
 ```bash
-lspci | grep -i usb
+lspci | grep -Ei 'storage|sata|nvme|usb|scsi'
 ```
 
-If nothing is displayed, record:
+If `lspci` is missing and installation is permitted, install `pciutils` using `sudo apt-get install -y pciutils`.
 
-```text
-No matching USB controller entry observed.
-```
+**Question:** What does an I/O controller do? If the VM does not expose controller details, explain why a virtual machine might show different hardware from a physical PC.
+
+## Task 10 – Compare Memory-Mapped and Port-Mapped I/O
+
+Read the descriptions:
+
+- **Memory-mapped I/O (MMIO):** Device registers occupy addresses in the processor's memory address space.
+- **Port-mapped I/O (PMIO):** Some processors, notably x86, provide a separate I/O address space with dedicated I/O instructions.
+
+Applications usually interact with hardware through operating-system drivers rather than accessing registers directly.
+
+**Question:** Describe one difference between MMIO and PMIO. Why does an operating system control access to device registers?
 
 ---
 
-## Task 10 - Inspect Kernel Messages for USB Devices
+# Part E – Polling and Events
 
-Run:
-
-```bash
-dmesg | grep -i usb | head -20
-```
-
-If permission is denied, try:
-
-```bash
-sudo dmesg | grep -i usb | head -20
-```
-
-Record any controller or device information you observe.
-
----
-
-# Part F - Understand Memory-Mapped and Port-Mapped I/O
-
-## Task 11 - Review MMIO and PMIO
-
-### Memory-Mapped I/O
-
-In **memory-mapped I/O (MMIO)**, device registers are exposed within the processor's memory address space. The CPU accesses them using ordinary memory-style load/store instructions.
-
-### Port-Mapped I/O
-
-In **port-mapped I/O (PMIO)**, devices use a separate I/O address space. On x86 systems, privileged code can use instructions such as `IN` and `OUT`.
-
-> [!note]
-> User applications normally do not access hardware registers directly. Linux exposes devices through kernel drivers for safety and portability.
-
----
-
-## Task 12 - Inspect Storage Hardware Information
-
-First identify the actual disk name:
-
-```bash
-lsblk
-```
-
-If your main disk is `/dev/sda`, run:
-
-```bash
-sudo hdparm -I /dev/sda | head -20
-```
-
-If your VM uses a different device name, substitute it appropriately.
-
-You can also run:
-
-```bash
-sudo lshw -class disk -short
-```
-
-Record:
-
-| Item | Observed value |
-|---|---|
-| Disk device | |
-| Model | |
-| Approximate capacity | |
-
----
-
-# Part G - Polling and Interrupt-Like Behaviour
-
-## Task 13 - Simulate Polling
+## Task 11 – Demonstrate Polling with Python
 
 Create `polling_demo.py`:
+
+```bash
+nano polling_demo.py
+```
 
 ```python
 import os
 import time
 
-print("Polling for trigger.txt. Press Ctrl+C to stop.")
-
-while True:
-    if os.path.exists("trigger.txt"):
-        print("Detected trigger!")
-        os.remove("trigger.txt")
-    time.sleep(1)
+print("Checking for trigger.txt; press Ctrl+C to stop")
+try:
+    while True:
+        if os.path.exists("trigger.txt"):
+            print("Trigger detected")
+            os.remove("trigger.txt")
+            break
+        time.sleep(1)
+except KeyboardInterrupt:
+    print("Stopped")
 ```
 
-Run:
+Run it in the **first** terminal:
 
 ```bash
 python3 polling_demo.py
 ```
 
-In a second terminal:
+Open a **second terminal**, go to the same directory, and create the trigger:
 
 ```bash
+cd ~/lab05
 touch trigger.txt
 ```
 
-Observe the first terminal and then press `Ctrl + C`.
+**Question:** Why is the program an example of polling? What happens if you increase the sleep interval?
 
-### Question
+## Task 12 – Demonstrate an Interrupt-Like Callback
 
-Why is this considered polling?
+Create `event_demo.py`:
 
----
-
-## Task 14 - Simulate an Interrupt-Like Event
-
-Create `interrupt_demo.py`:
+```bash
+nano event_demo.py
+```
 
 ```python
 import threading
 
-def interrupt_like_event():
-    print("Interrupt received: I/O completed.")
+def notify():
+    print("Event notification received")
 
-timer = threading.Timer(5.0, interrupt_like_event)
+timer = threading.Timer(3.0, notify)
+print("Waiting for an event...")
 timer.start()
-
-print("Waiting for I/O interrupt...")
 timer.join()
 ```
 
 Run:
 
 ```bash
-python3 interrupt_demo.py
+python3 event_demo.py
 ```
 
-Expected behaviour:
-
-```text
-Waiting for I/O interrupt...
-```
-
-Then approximately five seconds later:
-
-```text
-Interrupt received: I/O completed.
-```
-
-### Question
-
-How does this differ conceptually from the polling example?
+**Question:** How does this callback differ from repeatedly checking for a file? **Note:** This is a software event demonstration, **not a real hardware interrupt**.
 
 ---
 
-# Part H - Explore Device Drivers
+# Part F – Device Drivers and Storage
 
-## Task 15 - List Loaded Kernel Modules
-
-Run:
+## Task 13 – List Loaded Kernel Modules
 
 ```bash
-lsmod | head
+lsmod | head -15
 ```
+
+Kernel modules can provide drivers and other kernel functionality.
+
+**Question:** Why might Linux load some drivers as modules? If `lsmod` is unavailable, inspect `/proc/modules` using `head -15 /proc/modules`.
+
+## Task 14 – Inspect Module Information
+
+Choose a module name from the first column of the `lsmod` output. Replace `MODULE_NAME` with that name:
+
+```bash
+modinfo MODULE_NAME | head -20
+```
+
+**Record:** Module name, description (if shown), and filename (if shown). Some modules have limited metadata, and built-in drivers may not appear in `lsmod`.
+
+## Task 15 – Inspect Disk Characteristics
+
+```bash
+lsblk -o NAME,SIZE,ROTA,TYPE,MODEL
+```
+
+If available, check:
+
+```bash
+lsblk -d -o NAME,SIZE,ROTA,MODEL
+```
+
+`ROTA` is a device-reported rotational indicator (`1` usually indicates rotational storage, `0` non-rotational). In a VM, these details can reflect **virtualised hardware**, not the host's physical disk.
+
+**Question:** What can you infer from the device size, type, and rotational indicator? What information might be hidden by virtualisation?
+
+## Task 16 – Observe Basic Read Time
+
+Create a test file in your lab directory:
+
+```bash
+dd if=/dev/zero of=testfile bs=1M count=100 status=progress
+```
+
+Read it and measure elapsed time:
+
+```bash
+time cat testfile > /dev/null
+```
+
+Run the timed command twice.
+
+**Record:** The `real` time from each run. Were the times identical?
+
+> This is a simple observation activity, **not** a reliable disk benchmark: OS caching and VM conditions affect the results.
 
 ---
 
-## Task 16 - Inspect a Kernel Module
+# Part G – File I/O with Python
 
-We use `ext4` as an example:
-
-```bash
-modinfo ext4
-```
-
-If `ext4` is built into the kernel rather than loaded as a module, choose another module from `lsmod`.
-
-Record:
-
-```text
-Module name:
-Description:
-Filename:
-```
-
----
-
-## Task 17 - Inspect Device Metadata with `udevadm`
-
-Identify your disk:
-
-```bash
-lsblk
-```
-
-Then inspect it, for example:
-
-```bash
-udevadm info --query=all --name=/dev/sda | head -30
-```
-
-Use the actual disk device in your VM.
-
----
-
-# Part I - Storage Structure and Access Latency
-
-## Task 18 - Inspect Disk Model Information
-
-Run:
-
-```bash
-sudo hdparm -I /dev/sda | grep -i model
-```
-
-Substitute the correct disk if necessary. If the virtual disk does not support this query, record that result rather than guessing.
-
----
-
-## Task 19 - Perform a Read Timing Test
-
-Create a test file:
-
-```bash
-dd if=/dev/zero of=~/lab05/testfile bs=1M count=200 status=progress
-```
-
-Measure sequential read time:
-
-```bash
-time cat ~/lab05/testfile > /dev/null
-```
-
-Record:
-
-```text
-real:
-user:
-sys:
-```
-
-> [!note]
-> This is a simple observation exercise, not a complete storage benchmark.
-
----
-
-# Part J - Buffered and Lower-Level File I/O
-
-## Task 20 - Create a Buffered Python Write Test
+## Task 17 – Write a File Using Python
 
 Create `buffered_io.py`:
 
-```python
-with open("logfile.txt", "w") as f:
-    for i in range(100000):
-        f.write(f"Line {i}\n")
+```bash
+nano buffered_io.py
+```
 
-print("Buffered write completed.")
+```python
+with open("buffered.txt", "w") as file:
+    for i in range(10000):
+        file.write(f"Line {i}\n")
+
+print("File created using Python's file object")
 ```
 
 Run:
 
 ```bash
 python3 buffered_io.py
+ls -lh buffered.txt
 ```
 
-Check:
+**Question:** What does the `with open(...)` statement do? Why is buffering useful?
 
-```bash
-ls -lh logfile.txt
-```
-
----
-
-## Task 21 - Create a Lower-Level `os.write` Example
+## Task 18 – Compare with the `os.write()` Interface
 
 Create `oswrite_demo.py`:
+
+```bash
+nano oswrite_demo.py
+```
 
 ```python
 import os
 
-fd = os.open(
-    "unbuffered_log.txt",
-    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-    0o644
-)
+fd = os.open("lower_level.txt", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+try:
+    os.write(fd, b"Written through a file descriptor\n")
+finally:
+    os.close(fd)
 
-os.write(fd, b"Write performed using os.write().\n")
-os.close(fd)
-
-print("os.write example completed.")
+print("File created using os.write")
 ```
 
 Run:
 
 ```bash
 python3 oswrite_demo.py
+cat lower_level.txt
 ```
 
-Display the file:
-
-```bash
-cat unbuffered_log.txt
-```
-
-> [!note]
-> `os.write()` uses a lower-level file-descriptor interface than Python's normal buffered file object. This should not be described as true hardware direct I/O.
+**Question:** How does this code differ from Task 17? **Note:** `os.write()` provides a lower-level system-call interface; it does **not** mean the data bypasses the OS page cache or uses hardware direct I/O.
 
 ---
 
-# Part K - Monitor I/O Performance
+# Part H – Monitor I/O Activity
 
-## Task 22 - Install Monitoring Tools
+## Task 19 – Observe Disk Statistics with `iostat`
 
-Check `iostat`:
-
-```bash
-iostat --version
-```
-
-If unavailable:
+Check whether `iostat` is installed:
 
 ```bash
-sudo apt update
-sudo apt install sysstat -y
+command -v iostat
 ```
 
-Check `dstat`:
+If not found and installation is permitted:
 
 ```bash
-dstat --version
+sudo apt-get install -y sysstat
 ```
-
-If unavailable:
-
-```bash
-sudo apt install dstat -y
-```
-
----
-
-## Task 23 - Monitor Extended Disk Statistics
 
 Run:
 
 ```bash
-iostat -xm 1
+iostat -d 1 5
 ```
 
-Observe read/write throughput, utilisation, request size, and wait time. Press `Ctrl + C` to exit.
-
----
-
-## Task 24 - Monitor Multiple Resource Types
-
-Run:
+While it runs, you can create some file activity in another terminal:
 
 ```bash
-dstat -cdngyt
+cd ~/lab05
+dd if=/dev/zero of=monitor_test.img bs=1M count=50 status=none
 ```
 
-Observe CPU, disk, network, paging, and system activity. Press `Ctrl + C` to exit.
+**Question:** What do `tps`, `kB_read/s`, or `kB_wrtn/s` represent? Did you observe any activity? Results can be low or absent in a shared VM. If `iostat` is unavailable, record the limitation and continue.
 
----
-
-## Task 25 - Monitor Disk I/O with Python
+## Task 20 – Observe I/O Counters with Python
 
 Create `io_monitor.py`:
 
-```python
-import psutil
-import time
+```bash
+nano io_monitor.py
+```
 
-for i in range(5):
-    print("Disk IO:", psutil.disk_io_counters())
-    time.sleep(2)
+```python
+import time
+import psutil
+
+previous = psutil.disk_io_counters()
+if previous is None:
+    print("Disk I/O counters are unavailable in this environment")
+else:
+    print("Watching I/O counters for 5 seconds...")
+    time.sleep(5)
+    current = psutil.disk_io_counters()
+    if current is not None:
+        print("Read count change:", current.read_count - previous.read_count)
+        print("Write count change:", current.write_count - previous.write_count)
+        print("Bytes written change:", current.write_bytes - previous.write_bytes)
 ```
 
 Run:
@@ -666,241 +449,67 @@ Run:
 python3 io_monitor.py
 ```
 
-Observe how the counters change over time.
+**Question:** What does a change in the counters mean? Why might the reported activity include operations from other processes or the VM itself? If `psutil` is unavailable, explain what this script would measure.
 
 ---
 
-# Part L - Safe Storage Pressure and Error Simulation
+# Cleanup – Complete After Task 20
 
-## Task 26 - Check Available Space Before Testing
-
-Run:
+**Only detach the loop device associated with your own file.** First inspect its association:
 
 ```bash
-df -h .
+sudo losetup -j ~/lab05/virtualdisk.img
 ```
 
-Do not create a large test file if insufficient space is available.
-
----
-
-## Task 27 - Create a Moderate Test Allocation
-
-Instead of immediately allocating 2 GB, create a smaller test file:
-
-```bash
-fallocate -l 200M ~/lab05/junkfile
-```
-
-Check:
-
-```bash
-ls -lh ~/lab05/junkfile
-```
-
-Then remove it:
-
-```bash
-rm ~/lab05/junkfile
-```
-
----
-
-## Task 28 - Safely Demonstrate an Out-of-Range Read
-
-Do **not** run the original out-of-range test against the physical system disk.
-
-Find your loop device:
-
-```bash
-sudo losetup -a
-```
-
-Suppose it is `/dev/loop9`. Run:
-
-```bash
-sudo dd if=/dev/loop9 of=/dev/null bs=512 count=1 skip=999999999
-```
-
-Use the actual loop device assigned to your virtual disk.
-
-Record:
-
-```text
-Error or result observed:
-```
-
-### Question
-
-Why does the read fail or return no data?
-
----
-
-# Part M - Clean Up
-
-## Task 29 - Detach the Loop Device
-
-Find it:
-
-```bash
-sudo losetup -a
-```
-
-Detach it:
+If this lists a loop device, substitute that exact device for `/dev/loopX` below:
 
 ```bash
 sudo losetup -d /dev/loopX
 ```
 
-Replace `/dev/loopX` with the actual device.
-
----
-
-## Task 30 - Remove Temporary Files
+**Never detach an unrelated loop device.** If your file was never attached, skip detachment. After detaching, remove only the lab-generated files:
 
 ```bash
-rm -f ~/lab05/virtualdisk.img
-rm -f ~/lab05/testfile
-rm -f ~/lab05/logfile.txt
-rm -f ~/lab05/unbuffered_log.txt
+cd ~/lab05
+rm -f virtualdisk.img testfile buffered.txt lower_level.txt monitor_test.img trigger.txt
 ```
 
-# Final Validation
-
-Confirm that you have:
-
-- [ ] Created a file-backed virtual disk.
-- [ ] Mapped it to a loop device.
-- [ ] Distinguished block and character devices.
-- [ ] Used Python `psutil` to inspect disk information.
-- [ ] Inspected I/O controllers.
-- [ ] Explained MMIO and PMIO.
-- [ ] Demonstrated polling.
-- [ ] Demonstrated an interrupt-like event.
-- [ ] Inspected loaded kernel modules.
-- [ ] Inspected storage device information.
-- [ ] Compared file I/O methods.
-- [ ] Monitored I/O activity using `iostat`, `dstat`, and Python.
-- [ ] Performed safe storage-error experiments on a loop device.
-
----
-
-# Troubleshooting
-
-## Problem - `losetup` Does Not Show the Virtual Disk
+You may keep the Python scripts as learning resources. Check the directory:
 
 ```bash
-ls -lh ~/lab05/virtualdisk.img
-sudo losetup -fP ~/lab05/virtualdisk.img
+ls -lh
 ```
 
-## Problem - `hdparm` Is Missing
-
-```bash
-sudo apt update
-sudo apt install hdparm -y
-```
-
-## Problem - `lshw` Is Missing
-
-```bash
-sudo apt install lshw -y
-```
-
-## Problem - `iostat` Is Missing
-
-```bash
-sudo apt install sysstat -y
-```
-
-## Problem - `dstat` Is Missing
-
-```bash
-sudo apt install dstat -y
-```
-
-## Problem - LVM Commands Are Missing
-
-```bash
-sudo apt install lvm2 -y
-```
-
-## Problem - NTFS Formatting Tool Is Missing
-
-```bash
-sudo apt install ntfs-3g -y
-```
-
-## Problem - FAT Formatting Tool Is Missing
-
-```bash
-sudo apt install dosfstools -y
-```
+If privileged commands are blocked, inform your instructor rather than attempting to force cleanup.
 
 ---
 
 # Knowledge Check
 
-1. What is a file-backed virtual disk?
-2. What does `losetup` do?
-3. What is the difference between a block device and a character device?
-4. What information does `lsblk` provide?
-5. What information can `psutil.disk_partitions()` provide?
-6. What is MMIO?
-7. What is PMIO?
-8. Why does Linux normally prevent user applications from directly accessing hardware registers?
-9. What is polling?
-10. What is interrupt-driven I/O?
-11. What is the role of a device driver?
-12. What does `lsmod` display?
-13. What does `modinfo` display?
-14. What information can `iostat` provide?
-15. What is the difference between Python's normal buffered file writes and `os.write()`?
-16. Why should destructive disk experiments be performed on a loop device instead of the system disk?
-17. What is an LVM Physical Volume?
-18. What is a Volume Group?
-19. What is a Logical Volume?
-20. Why should persistent mounts use the actual UUID values from the local system?
+1. What is the difference between a block device and a character device?
+2. What does a loop device allow Linux to do?
+3. How does Linux use device drivers to communicate with hardware?
+4. What is one difference between MMIO and PMIO?
+5. How is polling conceptually different from an event notification or interrupt?
+6. Why might device details in a virtual machine differ from physical hardware?
+7. Why might two runs of a file read test produce different timings?
+8. How does Python's `open()` interface differ from `os.write()`?
+9. What types of information do `iostat` and `psutil.disk_io_counters()` show?
+10. Why is it important to detach only the loop device you created?
 
----
+# Final Validation
 
-# Optional Challenge
+Before completing the lab, confirm that you have:
 
-Using the safe 200 MB file-backed disk created earlier:
-
-1. attach it to a loop device;
-2. identify the loop device;
-3. inspect it with `lsblk`;
-4. monitor I/O with `iostat`;
-5. detach it cleanly;
-6. write three statements:
-
-```text
-Observed I/O behaviour:
-Linux abstraction involved:
-Safety control used:
-```
-
----
+- [ ] Created and inspected a virtual disk file (and a loop device if permitted).
+- [ ] Identified block and character devices.
+- [ ] Used Linux tools and Python to inspect I/O information.
+- [ ] Explained MMIO/PMIO and polling/event-driven behaviour.
+- [ ] Inspected a kernel module or recorded why the environment prevented it.
+- [ ] Tested simple file read and write operations.
+- [ ] Observed I/O statistics or recorded tool limitations.
+- [ ] Safely cleaned up your temporary files.
 
 ## Summary
 
-In this lab, you:
-
-- created a file-backed virtual disk;
-- mapped it to a loop device;
-- identified block and character devices;
-- inspected disk information using Linux commands and Python;
-- reviewed memory-mapped and port-mapped I/O;
-- simulated polling and interrupt-like events;
-- inspected kernel modules and driver metadata;
-- explored storage timing and I/O behaviour;
-- compared buffered and lower-level user-space I/O;
-- monitored system I/O activity;
-- practised safe storage-pressure and error testing;
-- investigated process file descriptors and inodes through `/proc`;
-- created an LVM structure on a file-backed loop device;
-- created NTFS and FAT logical volumes;
-- configured mount points and persistent mounts.
-
-You are now ready to work with more advanced Linux I/O, storage, and device-management concepts.
+You explored how Linux exposes I/O devices, virtual disks, kernel modules, and drivers. You also compared I/O approaches and used Linux and Python tools to observe file access and system I/O activity. The examples illustrate important operating-system concepts while avoiding changes to real storage devices.
