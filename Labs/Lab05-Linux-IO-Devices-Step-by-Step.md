@@ -14,12 +14,12 @@ By the end of this lab, you should be able to:
 - Create and inspect a safe file-backed virtual disk.
 - Inspect Linux storage and I/O devices using command-line tools and Python.
 - Distinguish memory-mapped I/O from port-mapped I/O, and polling from interrupt-driven I/O.
-- Compare basic file-writing interfaces and observe disk read time.
+- Perform a basic file-write activity, observe disk read time, and compare HDDs with SSDs.
 - Monitor I/O activity using `iostat` and Python.
 
 ## Scenario
 
-You are investigating how a Linux operating system communicates with I/O devices. You will create a small **disposable virtual disk**, inspect devices and drivers, explore two I/O-handling approaches, and observe simple I/O activity. The goal is to understand the concepts, not to administer real storage hardware.
+You are investigating how a Linux operating system communicates with I/O devices. You will create a small **disposable virtual disk**, inspect devices and drivers, explore two I/O-handling approaches, and observe simple I/O activity. The goal is to understand and observe the concepts introduced in the Week 5 I/O lecture, not to administer real storage hardware.
 
 ## Safety and Setup
 
@@ -60,6 +60,8 @@ Use this directory for the remaining activities unless a command specifies anoth
 # Part B – Create and Inspect a Virtual Disk
 
 ## Task 3 – Create a 200 MiB Virtual Disk File
+
+**Lecture connection (block devices and disk partitioning):** Linux normally treats disks as *block devices*, meaning data is accessed in blocks. In this lab, you will create a regular file and let Linux present it as a pretend block device through a **loop device**. This gives you a safe way to explore the block-device interface without changing the VM's real system disk. A loop device is a software representation; it is **not a new physical disk**.
 
 ```bash
 dd if=/dev/zero of=virtualdisk.img bs=1M count=200 status=progress
@@ -273,6 +275,8 @@ python3 event_demo.py
 
 ## Task 13 – List Loaded Kernel Modules
 
+**Lecture connection (device drivers and controllers):** A **device controller** handles communication with the hardware. A **device driver** is operating-system software that communicates with the controller on behalf of the kernel. In Linux, some drivers are compiled into the kernel and others are provided as **loadable kernel modules**. Not every kernel module is a device driver; modules can also provide file systems and other kernel features.
+
 ```bash
 lsmod | head -15
 ```
@@ -329,61 +333,61 @@ Run the timed command twice.
 
 ---
 
-# Part G – File I/O with Python
+# Part G – File I/O and Storage Characteristics
 
-## Task 17 – Write a File Using Python
+## Task 17 – Write and Read a File Using Python
 
-Create `buffered_io.py`:
+When a program writes data to a file, it normally uses operating-system services rather than communicating directly with a storage controller. Python's `open()` gives us a simple way to perform file I/O. Python may **buffer** writes, which means it temporarily groups data before passing it to the operating system.
+
+Create `file_io.py`:
 
 ```bash
-nano buffered_io.py
+nano file_io.py
 ```
 
-```python
-with open("buffered.txt", "w") as file:
-    for i in range(10000):
-        file.write(f"Line {i}\n")
+Enter:
 
-print("File created using Python's file object")
+```python
+with open("notes.txt", "w") as file:
+    file.write("Linux uses drivers to communicate with devices.\n")
+    file.write("Disks are examples of block devices.\n")
+
+with open("notes.txt", "r") as file:
+    print(file.read())
 ```
 
 Run:
 
 ```bash
-python3 buffered_io.py
-ls -lh buffered.txt
+python3 file_io.py
+ls -lh notes.txt
 ```
 
-**Question:** What does the `with open(...)` statement do? Why is buffering useful?
+**Questions:** What did the program write to the file? Which statement reads the file? Why does an application use the operating system for file I/O rather than accessing hardware registers itself?
 
-## Task 18 – Compare with the `os.write()` Interface
+> **Note:** `with` automatically closes the file, even if an error occurs. You do not need to know the internal details of Python buffering to complete this task.
 
-Create `oswrite_demo.py`:
+## Task 18 – Compare HDD and SSD Characteristics
+
+In the lecture, you saw that a **hard disk drive (HDD)** uses spinning platters and a moving read/write head, while a **solid-state drive (SSD)** stores data electronically and has no moving mechanical parts.
+
+Look again at the device information you obtained in Task 15:
 
 ```bash
-nano oswrite_demo.py
+lsblk -d -o NAME,SIZE,ROTA,MODEL
 ```
 
-```python
-import os
+Complete the comparison using **your lecture slides** (not assumptions about your VM):
 
-fd = os.open("lower_level.txt", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-try:
-    os.write(fd, b"Written through a file descriptor\n")
-finally:
-    os.close(fd)
+| Characteristic | HDD | SSD |
+|---|---|---|
+| Moving mechanical parts? | | |
+| Why might random access be slower or faster? | | |
+| Typical source of physical access delay | | |
 
-print("File created using os.write")
-```
+**Questions:** Why do HDDs have *seek time* and *rotational delay*, while SSDs do not? Can the `ROTA` value in a virtual machine prove the type of physical storage in the host computer? Explain briefly.
 
-Run:
-
-```bash
-python3 oswrite_demo.py
-cat lower_level.txt
-```
-
-**Question:** How does this code differ from Task 17? **Note:** `os.write()` provides a lower-level system-call interface; it does **not** mean the data bypasses the OS page cache or uses hardware direct I/O.
+> **Note:** A virtual machine may report a virtual disk as rotational or non-rotational independently of the actual storage hardware. No physical HDD or SSD is required for this comparison.
 
 ---
 
@@ -471,7 +475,7 @@ sudo losetup -d /dev/loopX
 
 ```bash
 cd ~/lab05
-rm -f virtualdisk.img testfile buffered.txt lower_level.txt monitor_test.img trigger.txt
+rm -f virtualdisk.img testfile notes.txt monitor_test.img trigger.txt
 ```
 
 You may keep the Python scripts as learning resources. Check the directory:
@@ -493,9 +497,9 @@ If privileged commands are blocked, inform your instructor rather than attemptin
 5. How is polling conceptually different from an event notification or interrupt?
 6. Why might device details in a virtual machine differ from physical hardware?
 7. Why might two runs of a file read test produce different timings?
-8. How does Python's `open()` interface differ from `os.write()`?
-9. What types of information do `iostat` and `psutil.disk_io_counters()` show?
-10. Why is it important to detach only the loop device you created?
+8. Why do programs use operating-system services to read and write files?
+9. Why do HDDs have seek time and rotational delay, but SSDs do not?
+10. What types of information can `iostat` and `psutil.disk_io_counters()` show? Why must you detach only the loop device you created?
 
 # Final Validation
 
@@ -506,10 +510,10 @@ Before completing the lab, confirm that you have:
 - [ ] Used Linux tools and Python to inspect I/O information.
 - [ ] Explained MMIO/PMIO and polling/event-driven behaviour.
 - [ ] Inspected a kernel module or recorded why the environment prevented it.
-- [ ] Tested simple file read and write operations.
+- [ ] Read and wrote a text file using Python and compared HDD/SSD characteristics.
 - [ ] Observed I/O statistics or recorded tool limitations.
 - [ ] Safely cleaned up your temporary files.
 
 ## Summary
 
-You explored how Linux exposes I/O devices, virtual disks, kernel modules, and drivers. You also compared I/O approaches and used Linux and Python tools to observe file access and system I/O activity. The examples illustrate important operating-system concepts while avoiding changes to real storage devices.
+You explored how Linux exposes I/O devices, virtual disks, kernel modules, and drivers. You also compared polling with event notifications, read and wrote a text file, compared HDDs and SSDs, and used Linux and Python tools to observe system I/O activity. The examples illustrate important operating-system concepts while avoiding changes to real storage devices.
