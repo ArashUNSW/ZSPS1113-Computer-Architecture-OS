@@ -37,7 +37,7 @@ The lab uses:
 ```
 
 > [!alert]
-> Do not modify SUID on critical system binaries such as `/usr/bin/passwd`. The original lab demonstrates this on the live system binary; this converted lab uses safe inspection instead.
+> Do not modify SUID on critical system binaries such as `/usr/bin/passwd`. 
 
 ---
 
